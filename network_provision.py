@@ -3,7 +3,7 @@
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning) 
 import time
-from scapy.all import ARP, Ether, srp, ICMP, IP, sr1
+from scapy.all import ICMP, IP, sr1
 import telnetlib
 import ipaddress
 import logging
@@ -31,16 +31,48 @@ def parse_ip_scope(scope):
     else:
         raise ValueError("Scope must be in 'network/mask' or 'start_ip-final_ip' format")
         
-def get_mac(ip):
+def get_mac(ip, username="admin", password="admin"):
     """
-    Returns the MAC address for a given IP in the local network using ARP.
+    Returns the MAC address for a given IP by connecting via Telnet and executing 'show network' command.
+    Parses the output for 'Mac Address      :' line and extracts the MAC address.
     """
-    arp_req = ARP(pdst=ip)
-    broadcast = Ether(dst="ff:ff:ff:ff:ff:ff")
-    answered = srp(broadcast/arp_req, timeout=2, verbose=False)[0]
-    for sent, received in answered:
-        return received.hwsrc
-    return None
+    try:
+        tn = telnetlib.Telnet(ip, 23, timeout=5)
+        tn.read_until(b"Login: ", timeout=5)
+        tn.write(username.encode('ascii') + b"\n")
+        tn.read_until(b"Password: ", timeout=5)
+        tn.write(password.encode('ascii') + b"\n")
+        idx, obj, res = tn.expect([b'#'], timeout=5)
+        if idx == -1:
+            logging.warning(f"{ip}: Telnet prompt not found after login.")
+            tn.close()
+            return None
+        
+        # Send 'show network' command
+        tn.write(b"show network\n")
+        # Read the response
+        response = tn.read_until(b'#', timeout=10)
+        tn.close()
+        
+        # Parse the response for MAC address
+        response_str = response.decode('ascii', errors='ignore')
+        lines = response_str.split('\n')
+        
+        for line in lines:
+            if 'Mac Address      :' in line:
+                # Extract MAC address from line like "Mac Address      :00:19:f3:06:79:ae"
+                mac_part = line.split('Mac Address      :')
+                if len(mac_part) > 1:
+                    mac = mac_part[1].strip()
+                    # Return MAC address in lowercase with colons (standard format)
+                    return mac.lower()
+        
+        logging.warning(f"{ip}: MAC address not found in 'show network' output.")
+        return None
+        
+    except Exception as e:
+        logging.error(f"{ip}: Failed to get MAC address via Telnet: {e}")
+        return None
 
 def is_alive(ip):
     """
@@ -88,16 +120,16 @@ def telnet_download_and_reload(ip, mac, tftp_server, username="admin", password=
 def scan_network(scope, tftp_server):
     ip_list = parse_ip_scope(scope)
     # while True:
-        for ip_str in ip_list:
-            if is_alive(ip_str):
-                mac = get_mac(ip_str)
-                if mac and mac.lower().startswith("00:19:f3"):
-                    logging.info(f"Device found: {ip_str} - {mac}")
-                    if telnet_download_and_reload(ip_str, mac, tftp_server):
-                        logging.info(f"Telnet command successful for {ip_str}")
-                    else:
-                        logging.warning(f"Telnet login failed for {ip_str}")
-            time.sleep(0.1)
+    for ip_str in ip_list:
+        if is_alive(ip_str):
+            mac = get_mac(ip_str)
+            if mac and mac.lower().startswith("00:19:f3"):
+                logging.info(f"Device found: {ip_str} - {mac}")
+                if telnet_download_and_reload(ip_str, mac, tftp_server):
+                    logging.info(f"Telnet command successful for {ip_str}")
+                else:
+                    logging.warning(f"Telnet login failed for {ip_str}")
+        time.sleep(0.1)
         # time.sleep(5)
 
 if __name__ == "__main__":
