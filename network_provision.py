@@ -1,6 +1,5 @@
 # plan of action: 1. Scan default network scope and check alive IPs with mac dddress filter as Telematrix devices.
 # If device has vendor mac - try to login via telnet with default login/password and apply basic provisionning settings, then restart the phone.
-import ipaddress
 import time
 from scapy.all import ARP, Ether, srp, ICMP, IP, sr1
 import telnetlib
@@ -101,16 +100,15 @@ def telnet_download_and_reload(ip, mac, tftp_server, username="admin", password=
         logging.error(f"{ip}: Telnet session error: {e}")
         return
         
-def scan_network(network_scope):
+def scan_network(scope, tftp_server):
     ip_list = parse_ip_scope(scope)
     while True:
         for ip_str in ip_list:
-            ip_str = str(ip)
             if is_alive(ip_str):
                 mac = get_mac(ip_str)
                 if mac and mac.lower().startswith("00:19:f3"):
                     logging.info(f"Device found: {ip_str} - {mac}")
-                    if telnet_login(ip_str):# Or after successful login and '#' prompt
+                    if telnet_login(ip_str):
                         logging.info(f"Telnet login successful for {ip_str}")
                         telnet_download_and_reload(ip_str, mac, tftp_server)
                     else:
