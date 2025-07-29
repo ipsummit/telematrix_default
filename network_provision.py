@@ -4,7 +4,30 @@ import ipaddress
 import time
 from scapy.all import ARP, Ether, srp, ICMP, IP, sr1
 import telnetlib
+import ipaddress
+import logging
 
+logging.basicConfig(
+    filename='network_provision.log',
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s: %(message)s'
+)
+
+def parse_ip_scope(scope):
+    # Detect network/mask format
+    if "/" in scope:
+        net = ipaddress.ip_network(scope, strict=False)
+        return [str(ip) for ip in net.hosts()]
+    # Detect ip range format: start_ip-final_ip
+    elif "-" in scope:
+        start_ip, final_ip = scope.split("-")
+        start_int = int(ipaddress.IPv4Address(start_ip.strip()))
+        final_int = int(ipaddress.IPv4Address(final_ip.strip()))
+        return [str(ipaddress.IPv4Address(ip))
+                for ip in range(start_int, final_int + 1)]
+    else:
+        raise ValueError("Scope must be in 'network/mask' or 'start_ip-final_ip' format")
+        
 def get_mac(ip):
     """
     Returns the MAC address for a given IP in the local network using ARP.
@@ -39,29 +62,29 @@ def telnet_login(ip, username="admin", password="admin"):
         tn.close()
         return idx != -1
     except Exception as e:
-        print(f"Telnet error on {ip}: {e}")
+        logging.error(f"Telnet error on {ip}: {e}")
         return False
 
 def scan_network(network_scope):
-    net = ipaddress.ip_network(network_scope, strict=False)
+    ip_list = parse_ip_scope(scope)
     while True:
-        for ip in net.hosts():
+        for ip_str in ip_list:
             ip_str = str(ip)
             if is_alive(ip_str):
                 mac = get_mac(ip_str)
                 if mac and mac.lower().startswith("00:19:f3"):
-                    print(f"Device found: {ip_str} - {mac}")
+                    logging.info(f"Device found: {ip_str} - {mac}")
                     if telnet_login(ip_str):
-                        print(f"Telnet login successful for {ip_str}")
+                        logging.info(f"Telnet login successful for {ip_str}")
                     else:
-                        print(f"Telnet login failed for {ip_str}")
-            time.sleep(0.1)  # Avoid hammering the network
-        time.sleep(5)  # Wait before rescanning
+                        logging.warning(f"Telnet login failed for {ip_str}")
+            time.sleep(0.1)
+        time.sleep(5)
 
 if __name__ == "__main__":
     import sys
     if len(sys.argv) != 2:
-        print("Usage: python network_provision.py <network/mask>")
+        print("Usage: python network_provision.py <network/mask or start_ip-final_ip>")
         sys.exit(1)
-    network_scope = sys.argv[1]
-    scan_network(network_scope)
+    scope = sys.argv[1]
+    scan_network(scope)
