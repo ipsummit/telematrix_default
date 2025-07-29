@@ -8,6 +8,7 @@ import telnetlib
 import ipaddress
 import logging
 import sys
+import re
 
 
 logging.basicConfig(
@@ -31,16 +32,33 @@ def parse_ip_scope(scope):
     else:
         raise ValueError("Scope must be in 'network/mask' or 'start_ip-final_ip' format")
         
-def get_mac(ip):
+def get_mac(ip, username="admin", password="admin", timeout=5):
     """
-    Returns the MAC address for a given IP in the local network using ARP.
+    Connect to a device via Telnet at the given IP, log in,
+    send 'show network', and extract the MAC address from the output.
+    Returns:
+        str: MAC address string (e.g. '00:19:f3:06:79:ae'), or None if not found.
     """
-    arp_req = ARP(pdst=ip)
-    broadcast = Ether(dst="ff:ff:ff:ff:ff:ff")
-    answered = srp(broadcast/arp_req, timeout=2, verbose=False)[0]
-    for sent, received in answered:
-        return received.hwsrc
-    return None
+    try:
+        tn = telnetlib.Telnet(ip, timeout=timeout)
+        tn.read_until(b"Login: ")
+        tn.write(username.encode('ascii') + b"\n")
+        tn.read_until(b"Password: ")
+        tn.write(password.encode('ascii') + b"\n")
+        tn.read_until(b"#")  # Wait for shell prompt
+
+        tn.write(b"show network\n")
+        output = tn.read_until(b"#", timeout=timeout).decode('ascii')
+
+        # Search for the line containing the MAC address
+        match = re.search(r"Mac Address\s*:\s*([0-9a-fA-F:]{17})", output)
+        if match:
+            return match.group(1)
+        else:
+            return None
+    except Exception as e:
+        logging.error(f"{ip}: Telnet session error: {e}")
+        return None
 
 def is_alive(ip):
     """
@@ -63,6 +81,7 @@ def telnet_download_and_reload(ip, mac, tftp_server, username="admin", password=
             tn.close()
             return
         # Build command
+        mac = mac.replace(';', '').lower()
         cmd = f"download tftp -ip {tftp_server} -file {mac}\n"
         tn.write(cmd.encode('ascii'))
         # Wait for reply
@@ -87,8 +106,7 @@ def telnet_download_and_reload(ip, mac, tftp_server, username="admin", password=
         
 def scan_network(scope, tftp_server):
     ip_list = parse_ip_scope(scope)
-    # while True:
-        for ip_str in ip_list:
+    for ip_str in ip_list:
             if is_alive(ip_str):
                 mac = get_mac(ip_str)
                 if mac and mac.lower().startswith("00:19:f3"):
@@ -98,8 +116,7 @@ def scan_network(scope, tftp_server):
                     else:
                         logging.warning(f"Telnet login failed for {ip_str}")
             time.sleep(0.1)
-        # time.sleep(5)
-
+  
 if __name__ == "__main__":
     if len(sys.argv) != 3:
         print("Usage: python3 network_provision.py <network/mask or start_ip-final_ip> <tftp_server_ip>")
