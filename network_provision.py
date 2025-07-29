@@ -1,13 +1,14 @@
 # plan of action: 1. Scan default network scope and check alive IPs with mac dddress filter as Telematrix devices.
 # If device has vendor mac - try to login via telnet with default login/password and apply basic provisionning settings, then restart the phone.
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning) 
 import time
 from scapy.all import ARP, Ether, srp, ICMP, IP, sr1
 import telnetlib
 import ipaddress
 import logging
 import sys
-import warnings
-warnings.filterwarnings("ignore", category=DeprecationWarning) 
+
 
 logging.basicConfig(
     filename='network_provision.log',
