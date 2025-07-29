@@ -66,7 +66,7 @@ def telnet_download_and_reload(ip, mac, tftp_server, username="admin", password=
         cmd = f"download tftp -ip {tftp_server} -file {mac}\n"
         tn.write(cmd.encode('ascii'))
         # Wait for reply
-        reply = tn.read_until(b"Download config file successfully!", timeout=5)
+        reply = tn.read_until(b"Download config file successfully!", timeout=10)
         if b"Download config file successfully!" in reply:
             logging.info(f"{ip}: Download config file successfully!")
             tn.write(b"reload\n")
@@ -87,7 +87,7 @@ def telnet_download_and_reload(ip, mac, tftp_server, username="admin", password=
         
 def scan_network(scope, tftp_server):
     ip_list = parse_ip_scope(scope)
-#    while True:
+    # while True:
         for ip_str in ip_list:
             if is_alive(ip_str):
                 mac = get_mac(ip_str)
@@ -98,7 +98,7 @@ def scan_network(scope, tftp_server):
                     else:
                         logging.warning(f"Telnet login failed for {ip_str}")
             time.sleep(0.1)
-        time.sleep(5)
+        # time.sleep(5)
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
