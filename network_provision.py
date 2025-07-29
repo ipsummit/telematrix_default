@@ -6,6 +6,8 @@ import telnetlib
 import ipaddress
 import logging
 import sys
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning) 
 
 logging.basicConfig(
     filename='network_provision.log',
@@ -118,7 +120,7 @@ def scan_network(scope, tftp_server):
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
-        print("Usage: python network_provision.py <network/mask or start_ip-final_ip> <tftp_server_ip>")
+        print("Usage: python3 network_provision.py <network/mask or start_ip-final_ip> <tftp_server_ip>")
         sys.exit(1)
     scope = sys.argv[1]
     tftp_server = sys.argv[2]
