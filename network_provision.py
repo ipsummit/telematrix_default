@@ -50,28 +50,10 @@ def is_alive(ip):
     reply = sr1(pkt, timeout=1, verbose=False)
     return reply is not None
 
-def telnet_login(ip, username="admin", password="admin"):
-    """
-    Attempts Telnet login, returns True if successful, False otherwise.
-    """
-    try:
-        tn = telnetlib.Telnet(ip, 23, timeout=5)
-        tn.read_until(b"login: ", timeout=5)
-        tn.write(username.encode('ascii') + b"\n")
-        tn.read_until(b"Password: ", timeout=5)
-        tn.write(password.encode('ascii') + b"\n")
-        # Wait for shell prompt (could be '#', '$', etc.), adjust as needed
-        idx, obj, res = tn.expect([b'#', b'>', b'\$'], timeout=5)
-        tn.close()
-        return idx != -1
-    except Exception as e:
-        logging.error(f"Telnet error on {ip}: {e}")
-        return False
-        
 def telnet_download_and_reload(ip, mac, tftp_server, username="admin", password="admin"):
     try:
         tn = telnetlib.Telnet(ip, 23, timeout=5)
-        tn.read_until(b"login: ", timeout=5)
+        tn.read_until(b"Login: ", timeout=5)
         tn.write(username.encode('ascii') + b"\n")
         tn.read_until(b"Password: ", timeout=5)
         tn.write(password.encode('ascii') + b"\n")
@@ -105,15 +87,14 @@ def telnet_download_and_reload(ip, mac, tftp_server, username="admin", password=
         
 def scan_network(scope, tftp_server):
     ip_list = parse_ip_scope(scope)
-    while True:
+#    while True:
         for ip_str in ip_list:
             if is_alive(ip_str):
                 mac = get_mac(ip_str)
                 if mac and mac.lower().startswith("00:19:f3"):
                     logging.info(f"Device found: {ip_str} - {mac}")
-                    if telnet_login(ip_str):
-                        logging.info(f"Telnet login successful for {ip_str}")
-                        telnet_download_and_reload(ip_str, mac, tftp_server)
+                    if telnet_download_and_reload(ip_str, mac, tftp_server):
+                        logging.info(f"Telnet command successful for {ip_str}")
                     else:
                         logging.warning(f"Telnet login failed for {ip_str}")
             time.sleep(0.1)
